@@ -1,0 +1,9 @@
+[server]
+bind = "127.0.0.1:8080"
+cookie_name = "OVPNSESS"
+session_ttl_secs = 900
+pepper_file = "dev.pepper"
+
+[db]
+url = "sqlite://var/ovpn-admin.sqlite?mode=rwc"
+
