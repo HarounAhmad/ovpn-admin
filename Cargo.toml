@@ -24,3 +24,6 @@ rand = "0.8"
 time = "0.3"
 ulid = "1"
 config = "0.14"
+clap = { version = "4.5.45", features = ["derive"] }
+rpassword = "7.4.0"
+axum-extra = { version = "0.10.1", features = ["cookie"] }
