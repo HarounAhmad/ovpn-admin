@@ -18,6 +18,20 @@ pub struct DbCfg {
 pub struct AppCfg {
     pub server: ServerCfg,
     pub db: DbCfg,
+    pub ovpn: Ovpn,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct Ovpn {
+    #[serde(default)]
+    pub vpncertctl_path: String,
+    pub socket_path: String,
+    pub ccd_dir: String,
+    pub cn_pattern: String,
+    pub bundle_remote: String,
+    pub bundle_port: u16,
+    pub bundle_proto: String,
+    pub bundles_dir: String,
 }
 
 impl AppCfg {

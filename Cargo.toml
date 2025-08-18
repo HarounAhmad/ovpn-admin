@@ -30,3 +30,6 @@ clap = { version = "4", features = ["derive"] }
 rpassword = "7"
 cookie = "0.18"
 base64 = "0.22"
+regex = "1.11.1"
+tokio-util = { version = "0.7.16", features = ["io"] }
+tempfile = "3"

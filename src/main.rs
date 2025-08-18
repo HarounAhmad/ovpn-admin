@@ -2,6 +2,8 @@ mod config;
 mod db;
 mod http;
 mod security;
+mod vpncertd;
+mod openvpn;
 
 use crate::config::AppCfg;
 use axum::Router;

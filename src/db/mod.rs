@@ -88,7 +88,7 @@ pub async fn delete_session(pool: &Db, sid: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/* throttle */
+
 
 pub async fn record_login_attempt(pool: &Db, username: &str, ip: &str) -> anyhow::Result<()> {
     let now = OffsetDateTime::now_utc().unix_timestamp();
@@ -106,7 +106,7 @@ pub async fn login_counts(pool: &Db, username: &str, ip: &str, window_secs: i64)
     Ok((cnt_user_ip, cnt_ip))
 }
 
-/* audit */
+
 
 pub async fn audit_record(pool: &Db, actor_user: &str, action: &str, target: &str, ip: &str, ua: &str, details_json: &str) -> anyhow::Result<()> {
     let id = Ulid::new().to_string();

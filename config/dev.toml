@@ -7,3 +7,11 @@ pepper_file = "dev.pepper"
 [db]
 url = "sqlite://var/ovpn-admin.sqlite?mode=rwc"
 
+[ovpn]
+socket_path     = "/home/haroun/workspace/security/vpn-certd/dist/run/vpn-certd.sock"
+ccd_dir         = "/home/haroun/openvpntest/ccd"
+cn_pattern      = "^[A-Za-z0-9._-]{3,64}$"
+bundle_remote   = "vpn.erisdev.io"
+bundle_port     = 1194
+bundle_proto    = "udp"
+bundles_dir     = "/home/haroun/openvpntest/bundles"

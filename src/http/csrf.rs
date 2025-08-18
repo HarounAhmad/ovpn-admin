@@ -24,7 +24,7 @@ pub async fn issue_token() -> impl axum::response::IntoResponse {
     let mut c = Cookie::new(CSRF_COOKIE, token);
     c.set_path("/");
     c.set_secure(true);
-    c.set_http_only(false); // double-submit cookie pattern
+    c.set_http_only(false);
     c.set_same_site(cookie::SameSite::Strict);
     let v = axum::http::HeaderValue::from_str(&c.to_string()).unwrap();
     (StatusCode::NO_CONTENT, [(header::SET_COOKIE, v)])

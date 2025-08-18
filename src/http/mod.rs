@@ -6,6 +6,7 @@ use crate::AppState;
 pub mod auth;
 pub mod guards;
 pub mod csrf;
+pub mod admin;
 
 async fn root() -> &'static str { "ok" }
 async fn health() -> &'static str { "ok" }
@@ -45,6 +46,7 @@ pub fn router() -> Router<AppState> {
         .route("/protected/admin-ping", get(admin_ping))
         .route("/auth/csrf", get(csrf::issue_token))
         .merge(auth::routes())
+        .merge(admin::routes())
         .layer(middleware::from_fn(csrf::protect))
         .layer(sec_headers)
 }
