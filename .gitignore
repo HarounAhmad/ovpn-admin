@@ -6,3 +6,5 @@ debug
 *.pdb
 
 **/mutants.out*/
+
+var/ovpn-admin.sqlite
