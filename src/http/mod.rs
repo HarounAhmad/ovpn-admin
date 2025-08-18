@@ -7,7 +7,6 @@ pub mod guards;
 async fn root() -> &'static str { "ok" }
 async fn health() -> &'static str { "ok" }
 
-// Demo protected handler: requires ADMIN
 async fn admin_ping(sess: guards::AuthSession) -> Result<&'static str, axum::http::StatusCode> {
     guards::ensure_role(&sess, &["ADMIN"])?;
     Ok("pong")

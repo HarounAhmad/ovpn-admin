@@ -87,3 +87,58 @@ pub async fn delete_session(pool: &Db, sid: &str) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM sessions WHERE id=?").bind(sid).execute(pool).await?;
     Ok(())
 }
+
+/* throttle */
+
+pub async fn record_login_attempt(pool: &Db, username: &str, ip: &str) -> anyhow::Result<()> {
+    let now = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("INSERT INTO login_attempts(username, ts, ip) VALUES(?,?,?)")
+        .bind(username).bind(now).bind(ip).execute(pool).await?;
+    Ok(())
+}
+
+pub async fn login_counts(pool: &Db, username: &str, ip: &str, window_secs: i64) -> anyhow::Result<(i64, i64)> {
+    let since = OffsetDateTime::now_utc().unix_timestamp() - window_secs;
+    let cnt_user_ip: i64 = sqlx::query("SELECT COUNT(*) FROM login_attempts WHERE username=? AND ip=? AND ts>?")
+        .bind(username).bind(ip).bind(since).fetch_one(pool).await?.try_get(0).unwrap();
+    let cnt_ip: i64 = sqlx::query("SELECT COUNT(*) FROM login_attempts WHERE ip=? AND ts>?")
+        .bind(ip).bind(since).fetch_one(pool).await?.try_get(0).unwrap();
+    Ok((cnt_user_ip, cnt_ip))
+}
+
+/* audit */
+
+pub async fn audit_record(pool: &Db, actor_user: &str, action: &str, target: &str, ip: &str, ua: &str, details_json: &str) -> anyhow::Result<()> {
+    let id = Ulid::new().to_string();
+    let ts = OffsetDateTime::now_utc().unix_timestamp();
+    sqlx::query("INSERT INTO audit(id, ts, actor_user, action, target, ip, ua, details) VALUES(?,?,?,?,?,?,?,?)")
+        .bind(id).bind(ts).bind(actor_user).bind(action).bind(target).bind(ip).bind(ua).bind(details_json)
+        .execute(pool).await?;
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct AuditRow {
+    pub ts: i64,
+    pub actor_user: String,
+    pub action: String,
+    pub target: String,
+    pub ip: String,
+    pub ua: String,
+    pub details: String,
+}
+
+pub async fn audit_list(pool: &Db, limit: i64, offset: i64) -> anyhow::Result<Vec<AuditRow>> {
+    let limit = limit.clamp(1, 200);
+    let rows = sqlx::query("SELECT ts, actor_user, action, target, ip, ua, details FROM audit ORDER BY ts DESC LIMIT ? OFFSET ?")
+        .bind(limit).bind(offset).fetch_all(pool).await?;
+    Ok(rows.into_iter().map(|r| AuditRow {
+        ts: r.try_get(0).unwrap(),
+        actor_user: r.try_get(1).unwrap(),
+        action: r.try_get(2).unwrap(),
+        target: r.try_get(3).unwrap(),
+        ip: r.try_get(4).unwrap(),
+        ua: r.try_get(5).unwrap(),
+        details: r.try_get(6).unwrap(),
+    }).collect())
+}

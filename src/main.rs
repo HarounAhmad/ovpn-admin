@@ -54,8 +54,9 @@ async fn main() -> anyhow::Result<()> {
     let addr: std::net::SocketAddr = cfg.server.bind.parse()?;
     tracing::info!("listening on http://{}", addr);
     axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .await?;
     Ok(())
+
 
 }
