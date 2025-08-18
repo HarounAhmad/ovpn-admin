@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 axum = "=0.6.20"
 tokio = { version = "1", features = ["macros","rt-multi-thread"] }
-tower-http = { version = "=0.4.4", features = ["trace"] }
+tower-http = { version = "=0.4.4", features = ["trace","set-header"] }  # add set-header
+tower = "0.4"                                                           # for ServiceBuilder
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
@@ -28,3 +29,4 @@ config = "0.14"
 clap = { version = "4", features = ["derive"] }
 rpassword = "7"
 cookie = "0.18"
+base64 = "0.22"
