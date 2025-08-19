@@ -3,10 +3,11 @@ name = "ovpn-admin"
 version = "0.1.0"
 edition = "2024"
 
+
 [dependencies]
 axum = "=0.6.20"
 tokio = { version = "1", features = ["macros","rt-multi-thread"] }
-tower-http = { version = "=0.4.4", features = ["trace","set-header"] }  # add set-header
+tower-http = { version = "=0.4.4", features = ["trace","set-header", "compression-gzip","compression-br"] }  # add set-header
 tower = "0.4"                                                           # for ServiceBuilder
 
 tracing = "0.1"
@@ -33,3 +34,5 @@ base64 = "0.22"
 regex = "1.11.1"
 tokio-util = { version = "0.7.16", features = ["io"] }
 tempfile = "3"
+rust-embed = { version = "8", features = ["debug-embed"] }
+mime_guess = "2"
