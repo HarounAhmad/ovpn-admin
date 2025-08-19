@@ -7,6 +7,7 @@
   import AdminClients from './components/AdminClients.svelte'
   import CcdEditor from './components/CcdEditor.svelte'
   import { route, goto } from './lib/hashRouter'
+  import Audit from "./components/Audit.svelte";
 
   onMount(() => { refreshSession() })
   $: r = $route
@@ -24,6 +25,7 @@
     {#if r === '/'}         <Dashboard />
     {:else if r.startsWith('/clients')}{guardAdmin()}<AdminClients />
     {:else if r.startsWith('/ccd')}{guardAdmin()}<CcdEditor />
+    {:else if r.startsWith('/audit')}{guardAdmin()}<Audit />
     {:else}<section class="pad"><h2>Not found</h2></section>{/if}
   {/if}
 {/if}
