@@ -6,10 +6,11 @@ use axum::{
     body::{Body, boxed},
     Json, Router,
 };
+use axum::extract::Query;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
-use crate::{http::guards, openvpn, AppState};
+use crate::{http::guards, openvpn, vpncertd, AppState};
 use crate::http::guards::AuthSession;
 
 #[derive(Deserialize)]
@@ -150,10 +151,27 @@ async fn put_ccd(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Deserialize)]
+struct IssuedQ { limit: Option<usize> }
+
+pub async fn issued(
+    State(st): State<AppState>,
+    sess: guards::AuthSession,
+    Query(q): Query<IssuedQ>,
+) -> Result<Json<Vec<vpncertd::IssuedMeta>>, StatusCode> {
+    guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
+    let list = vpncertd::list_issued(&st.cfg.ovpn.socket_path, q.limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(list))
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/admin/issued", axum::routing::get(issued))
         .route("/admin/clients", post(create_client))
         .route("/admin/clients/:cn/revoke", post(revoke_client))
         .route("/admin/clients/:cn/bundle", post(bundle))
         .route("/admin/ccd/:cn", get(get_ccd).put(put_ccd))
 }
+

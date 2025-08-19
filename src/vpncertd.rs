@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use std::path::Path;
 use base64::Engine;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::UnixStream,
@@ -32,6 +32,16 @@ struct IssueWire {
     key_pem_encrypted: String,
     #[serde(default)] serial: Option<String>,
     #[serde(default)] not_after: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssuedMeta {
+    pub serial: String,
+    pub cn: String,
+    pub profile: String,
+    pub not_after: String,
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 pub struct IssueReply {
@@ -111,4 +121,16 @@ pub async fn build_bundle(
     });
     let _ = call_raw(socket, &req).await?;
     Ok(())
+}
+
+pub async fn list_issued(socket: &str, limit: Option<usize>) -> Result<Vec<IssuedMeta>> {
+    let req = json!({ "op": "LIST_ISSUED" });
+    let v = call_raw(socket, &req).await?;
+    let mut list: Vec<IssuedMeta> = serde_json::from_value(
+        v.get("issued").cloned().unwrap_or(Value::Array(vec![]))
+    )?;
+    if let Some(n) = limit {
+        if list.len() > n { list.truncate(n); }
+    }
+    Ok(list)
 }
