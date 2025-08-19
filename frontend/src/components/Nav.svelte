@@ -1,23 +1,13 @@
 <script lang="ts">
-    import { session } from '../lib/store'
     import { goto } from '../lib/hashRouter'
-    import { logout } from '../lib/api'
-    const nav = (p:string)=>()=>goto(p)
-    async function doLogout(){ await logout(); location.reload() }
-    $: s = $session
+    import { logout, session } from '../lib/store'
 </script>
 
-<nav class="navbar">
-    <strong>OVPN Admin</strong>
-    <button class="btn" on:click={nav('/')}>Dashboard</button>
-    {#if s?.roles?.includes('ADMIN')}
-        <button class="btn" on:click={nav('/clients')}>Clients</button>
-        <button class="btn" on:click={nav('/ccd')}>CCD</button>
-        <button class="btn" on:click={nav('/audit')}>Audit</button>
-    {/if}
-    <div class="spacer"></div>
-    {#if s}
-        <span class="muted">{$session?.username}</span>
-        <button class="btn ghost" on:click={doLogout}>Logout</button>
-    {/if}
+<nav class="nav">
+    <a href="#/">OVPN Admin</a>
+    <a href="#/clients">Clients</a>
+    <a href="#/ccd/haroun-test">CCD</a>
+    <div style="flex:1"></div>
+    {#if $session}<span class="muted">{$session.username}</span>{/if}
+    <button class="btn" on:click={logout}>Logout</button>
 </nav>

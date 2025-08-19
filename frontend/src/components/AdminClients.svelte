@@ -1,65 +1,83 @@
 <script lang="ts">
-    import { postJson, postBlob } from '../lib/api'
-    import { toast } from '../lib/toast'
-    let cn=''; let includeKey=true; let busy=false; let last=''
+    import { api } from '../lib/api'
+    import { session } from '../lib/store'
+    import { onMount } from 'svelte'
+    let cn = ''
+    let include_key = true
+    let creating = false
+    let creatingErr = ''
+    let issuing = false
+    let bundleCN = ''
+    let bundleErr = ''
+    let issued: Array<{serial:string; cn:string; profile:string; not_after:string}> = []
 
-    async function createClient(){
-        if(!cn) return
-        busy=true
-        try{
-            await postJson('/admin/clients',{cn,include_key:includeKey})
-            last = cn
-            toast('Client created')
-        }catch(e){
-            const m = (e as Error).message
-            if (m.includes('409')) toast('Client exists')
-            else toast(`Create failed: ${m}`)
-        }finally{ busy=false }
+    async function refreshIssued() {
+        issued = await api.get('/admin/issued?limit=50')
     }
 
-    async function downloadBundle(name = cn){
-        if(!name) return
-        busy=true
-        try{
-            const b=await postBlob(`/admin/clients/${encodeURIComponent(name)}/bundle`,{include_key:includeKey})
-            const url=URL.createObjectURL(b)
-            const a=document.createElement('a'); a.href=url; a.download=`${name}.zip`; a.click()
+    async function createClient() {
+        creating = true; creatingErr = ''
+        try {
+            await api.post('/admin/clients', { cn, include_key })
+            cn = ''
+            await refreshIssued()
+        } catch (e) {
+            creatingErr = String(e)
+        } finally { creating = false }
+    }
+
+    async function downloadBundle(cn: string) {
+        issuing = true; bundleErr = ''
+        try {
+            const b = await api.postBlob(`/admin/clients/${encodeURIComponent(cn)}/bundle`, { include_key: true })
+            const url = URL.createObjectURL(b)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${cn}.zip`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
             URL.revokeObjectURL(url)
-            toast('Bundle downloaded')
-        }catch(e){ toast(`Bundle failed: ${(e as Error).message}`) }finally{ busy=false }
+        } catch (e) {
+            bundleErr = String(e)
+        } finally { issuing = false }
     }
 
-    async function revoke(){
-        if(!cn) return
-        busy=true
-        try{ await postJson(`/admin/clients/${encodeURIComponent(cn)}/revoke`,{}); toast('Client revoked') }
-        catch(e){ toast(`Revoke failed: ${(e as Error).message}`) }
-        finally{ busy=false }
-    }
-
-    function copy(v:string){ navigator.clipboard.writeText(v); toast('Copied') }
+    onMount(refreshIssued)
 </script>
 
-<section class="section" style="max-width:640px;display:grid;gap:12px">
+<section class="pad grid">
     <h2>Clients</h2>
-    <div style="display:grid;gap:8px">
-        <label>Common Name <input class="input" bind:value={cn} placeholder="alice-laptop" /></label>
-        <label><input type="checkbox" bind:checked={includeKey} /> include private key in bundle</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn primary" on:click={createClient} disabled={!cn||busy}>Create</button>
-            <button class="btn" on:click={()=>downloadBundle(cn)} disabled={!cn||busy}>Bundle</button>
-            <button class="btn" on:click={revoke} disabled={!cn||busy}>Revoke</button>
+    <div class="card grid">
+        <div class="row">
+            <input class="input" placeholder="common name" bind:value={cn} />
+            <label class="row"><input type="checkbox" bind:checked={include_key} /> include key</label>
+            <button class="btn primary" disabled={creating || !cn} on:click|preventDefault={createClient}>
+                {creating ? 'Creating…' : 'Create'}
+            </button>
         </div>
+        {#if creatingErr}<div class="muted">Error: {creatingErr}</div>{/if}
     </div>
 
-    {#if last}
-        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;gap:8px;align-items:center">
-            <div class="muted">Last created:</div>
-            <code>{last}</code>
-            <button class="btn" on:click={()=>copy(last)}>Copy</button>
-            <button class="btn" on:click={()=>downloadBundle(last)} disabled={busy}>Download bundle</button>
-        </div>
-    {/if}
-
-    {#if busy}<div>Working…</div>{/if}
+    <div class="card">
+        <h3>Issued</h3>
+        <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th style="text-align:left">CN</th><th>Profile</th><th>Not After</th><th></th></tr></thead>
+            <tbody>
+            {#each issued as it}
+                <tr>
+                    <td>{it.cn}</td>
+                    <td class="muted">{it.profile}</td>
+                    <td class="muted">{it.not_after}</td>
+                    <td style="text-align:right">
+                        <button class="btn" disabled={issuing} on:click={() => downloadBundle(it.cn)}>
+                            {issuing && bundleCN===it.cn ? '…' : 'Bundle'}
+                        </button>
+                    </td>
+                </tr>
+            {/each}
+            </tbody>
+        </table>
+        {#if bundleErr}<div class="muted">Error: {bundleErr}</div>{/if}
+    </div>
 </section>

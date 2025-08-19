@@ -1,45 +1,40 @@
 <script lang="ts">
+    import { api } from '../lib/api'
+    import { session } from '../lib/store'
     import { onMount } from 'svelte'
-    import { getJson } from '../lib/api'
-    type Health = string
-    type Me = { username:string; roles:string[] }
-    let health: Health | null = null
-    let me: Me | null = null
+    let health = '…'
+    let me: any = null
+    let audit: any[] = []
     let err = ''
-
-    async function load() {
-        err = ''
+    onMount(async () => {
         try {
-            const h = await getJson<{ok:boolean}>('/health')
+            const h = await api.get<{ok:boolean}>('/health')
             health = h.ok ? 'ok' : 'down'
-            me = await getJson<Me>('/me')
-        } catch (e) {
-            err = (e as Error).message
-        }
-    }
-    onMount(load)
+            me = await api.get('/me')
+            audit = await api.get('/admin/audit?limit=20').catch(()=>[])
+        } catch (e) { err = String(e) }
+    })
 </script>
 
-<section class="section" style="display:grid;gap:12px">
+<section class="pad grid">
     <h2>Dashboard</h2>
-    {#if err}<div style="color:#b00020">{err}</div>{/if}
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
-        <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-            <div class="muted">Health</div>
-            <div style="font-weight:600;margin-top:6px"><b>API: &nbsp;</b>{health ?? '—'}</div>
-            <div style="font-weight:600;margin-top:6px"><b>Daemon: &nbsp;</b>{health ?? '—'}</div>
-            <div style="font-weight:600;margin-top:6px"><b>Managment: &nbsp;</b>{health ?? '—'}</div>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-            <div class="muted">Session</div>
-            {#if me}
-                <div style="margin-top:6px">
-                    <div><strong>{me.username}</strong></div>
-                    <div class="muted" style="margin-top:4px">{me.roles.join(', ')}</div>
-                </div>
-            {:else}
-                <div style="margin-top:6px">Not signed in</div>
-            {/if}
-        </div>
+    {#if err}<div class="muted">Error: {err}</div>{/if}
+    <div class="card row">
+        <div>API: <b>{health ?? '—'}</b></div>
+        <div>Daemon: <b>{health ?? '—'}</b></div>
+        <div>Managment: <b>{health ?? '—'}</b></div>
+
+        {#if me}<div class="muted" style="margin-left:16px">Signed in as {me.username}</div>{/if}
     </div>
+
+    {#if audit.length}
+        <div class="card">
+            <h3>Recent audit</h3>
+            <ul>
+                {#each audit as a}
+                    <li class="muted">{a.ts} · {a.actor_user} · {a.action} · {a.target}</li>
+                {/each}
+            </ul>
+        </div>
+    {/if}
 </section>

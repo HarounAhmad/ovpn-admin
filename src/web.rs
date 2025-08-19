@@ -15,6 +15,7 @@ struct Assets;
 
 fn resp_bytes(bytes: Vec<u8>, path: &str) -> Response {
     let mime = from_path(path).first_or_octet_stream();
+    println!("Serving {} with MIME type {}", path, mime.as_ref());
     let mut resp = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, HeaderValue::from_str(mime.as_ref()).unwrap())

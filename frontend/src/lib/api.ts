@@ -1,81 +1,39 @@
-const API = '/api';
-
-function getCookie(name: string): string | null {
-    const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+// minimal fetch w/ credentials + CSRF header
+function xsrf(): string | null {
+    const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : null;
 }
 
-async function ensureCsrf(): Promise<string> {
-    const existing = getCookie('XSRF-TOKEN');
-    if (existing) return existing;
-    await fetch(`${API}/auth/csrf`, { credentials: 'include' });
-    const token = getCookie('XSRF-TOKEN');
-    if (!token) throw new Error('csrf');
-    return token;
+async function ensureCsrf(): Promise<void> {
+    if (xsrf()) return;
+    await fetch('/api/auth/csrf', { credentials: 'include' });
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
-    return fetch(`${API}${path}`, { credentials: 'include', ...init });
-}
-
-export async function getJson<T>(path: string): Promise<T> {
-    const r = await request(path);
-    if (r.status === 401) throw new Error('unauthorized');
-    if (!r.ok) throw new Error(`GET ${path} -> ${r.status}`);
-    return r.json() as Promise<T>;
-}
-
-export async function postJson<T>(path: string, body: unknown): Promise<T | void> {
-    const token = await ensureCsrf();
-    const r = await request(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify(body),
-    });
-    if (r.status === 401) throw new Error('unauthorized');
-    if (r.status === 204) return;
-    if (!r.ok) throw new Error(`POST ${path} -> ${r.status}`);
-    const ct = r.headers.get('content-type') || '';
-    return ct.includes('application/json') ? r.json() : (undefined as unknown as T);
-}
-
-export async function putJson<T>(path: string, body: unknown): Promise<T | void> {
-    const token = await ensureCsrf();
-    const r = await request(path, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify(body),
-    });
-    if (r.status === 401) throw new Error('unauthorized');
-    if (!r.ok) throw new Error(`PUT ${path} -> ${r.status}`);
-    return r.status === 204 ? undefined : r.json();
-}
-
-export async function postBlob(path: string, body: unknown): Promise<Blob> {
-    const token = await ensureCsrf();
-    const r = await request(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-        body: JSON.stringify(body),
-    });
-    if (r.status === 401) throw new Error('unauthorized');
-    if (!r.ok) throw new Error(`POST ${path} -> ${r.status}`);
-    return r.blob();
-}
-
-export async function login(username: string, password: string): Promise<void> {
+async function req(method: string, path: string, body?: any, asBlob = false) {
     await ensureCsrf();
-    const r = await request('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCookie('XSRF-TOKEN')! },
-        body: JSON.stringify({ username, password }),
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    const token = xsrf();
+    if (token) headers['X-CSRF-Token'] = token;
+    if (body && !asBlob) headers['Content-Type'] = 'application/json';
+
+    const r = await fetch(`/api${path}`, {
+        method,
+        headers,
+        body: body ? (asBlob ? body : JSON.stringify(body)) : undefined,
+        credentials: 'include'
     });
-    if (r.status === 204) return;
-    if (r.status === 403) throw new Error('forbidden');
-    throw new Error(`login ${r.status}`);
+
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+
+    if (asBlob) return await r.blob();
+    const ct = r.headers.get('content-type') || '';
+    return ct.includes('application/json') ? r.json() : r.text();
 }
 
-export async function logout(): Promise<void> {
-    const token = await ensureCsrf();
-    await request('/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': token } });
-}
+export const api = {
+    get: <T=any>(p: string) => req('GET', p) as Promise<T>,
+    post: <T=any>(p: string, b?: any) => req('POST', p, b) as Promise<T>,
+    put:  <T=any>(p: string, b?: any) => req('PUT',  p, b) as Promise<T>,
+    del:  <T=any>(p: string) => req('DELETE', p) as Promise<T>,
+    postBlob: (p: string, b?: any) => req('POST', p, b, true) as Promise<Blob>,
+};
