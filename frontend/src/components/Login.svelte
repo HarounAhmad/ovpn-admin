@@ -3,24 +3,33 @@
     import { refreshSession } from '../lib/store'
     let username = ''
     let password = ''
+    let busy = false
     let err = ''
+
     async function submit(e: Event) {
         e.preventDefault()
-        err = ''
+        if (!username || !password) return
+        busy = true; err = ''
         try {
             await login(username, password)
             await refreshSession()
-            location.hash = '/'
         } catch (e) {
             err = (e as Error).message || 'login failed'
+        } finally {
+            busy = false
         }
     }
 </script>
 
-<form on:submit|preventDefault={submit} style="max-width:340px;margin:64px auto;display:flex;flex-direction:column;gap:10px">
-    <h2>Sign in</h2>
-    {#if err}<div style="color:#b00">{err}</div>{/if}
-    <label>Username <input class="input" bind:value={username} required /></label>
-    <label>Password <input class="input" type="password" bind:value={password} required /></label>
-    <button class="btn" type="submit">Login</button>
-</form>
+<section class="section" style="max-width:420px;margin:40px auto;display:grid;gap:12px">
+    <h2>Login</h2>
+    {#if err}<div style="color:#b00020">{err}</div>{/if}
+    <form on:submit|preventDefault={submit} style="display:grid;gap:10px">
+        <label>Username <input class="input" bind:value={username} autocomplete="username" /></label>
+        <label>Password <input class="input" type="password" bind:value={password} autocomplete="current-password" /></label>
+        <div style="display:flex;gap:8px">
+            <button class="btn primary" disabled={busy || !username || !password} on:click={submit}>Sign in</button>
+            <button class="btn" type="reset" on:click={() => { username=''; password=''; err='' }} disabled={busy}>Clear</button>
+        </div>
+    </form>
+</section>

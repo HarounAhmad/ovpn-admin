@@ -1,20 +1,31 @@
-use axum::{middleware, routing::{get, post}, Router};
+use axum::{middleware, routing::{get, post}, Json, Router};
 use tower_http::set_header::SetResponseHeaderLayer;
 use axum::http::HeaderValue;
 use axum::response::Redirect;
+use serde_json::json;
 use crate::AppState;
 pub mod auth; pub mod guards; pub mod csrf; pub mod admin;
 
-async fn health() -> &'static str { "ok" }
+async fn health() -> Json<serde_json::Value> {
+    Json(json!({ "ok": true }))
+}
+
 async fn admin_ping(sess: guards::AuthSession) -> Result<&'static str, axum::http::StatusCode> {
     guards::ensure_role(&sess, &["ADMIN"])?; Ok("pong")
 }
 
 pub fn router() -> Router<AppState> {
+    let csp = "default-src 'self'; \
+        style-src 'self' 'unsafe-inline'; \
+        script-src 'self'; \
+        connect-src 'self'; \
+        img-src 'self' data:; \
+        frame-ancestors 'none'; object-src 'none'; \
+        base-uri 'none'; form-action 'self'";
     let sec_headers = tower::ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::header::CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static("default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'")
+            HeaderValue::from_static(csp)
         ))
         .layer(SetResponseHeaderLayer::overriding(
             axum::http::header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")
