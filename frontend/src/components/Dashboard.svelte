@@ -1,14 +1,13 @@
 <script lang="ts">
     import { onMount } from 'svelte';
 
-    // normalize any /health-style endpoint (JSON or text) to "ok"/"down"
+
     const fetchStatus = async (path: string): Promise<string> => {
         const r = await fetch(`/api${path}`, { credentials: 'include' });
         if (!r.ok) return 'down';
 
         const ct = r.headers.get('content-type') ?? '';
         if (ct.includes('application/json')) {
-            // try common JSON shapes
             const j: any = await r.json().catch(() => ({}));
             if (typeof j?.ok === 'boolean') return j.ok ? 'ok' : 'down';
             if (typeof j?.status === 'string') return j.status.toLowerCase();
@@ -17,7 +16,7 @@
             const t = (await r.text()).trim().toLowerCase();
             if (t === 'ok' || t === 'pong' || t === 'healthy') return 'ok';
             if (!t) return 'down';
-            return t; // show whatever the server sent
+            return t;
         }
     };
 
@@ -51,7 +50,6 @@
             err ||= String(e);
         }
 
-        // If you don’t have dedicated endpoints yet, mirror API as placeholders.
         daemonStatus = apiStatus;
         mgmtStatus = apiStatus;
 

@@ -3,7 +3,6 @@ import { writable } from 'svelte/store';
 function norm(p: string) {
     if (!p) return '/';
     if (!p.startsWith('/')) p = '/' + p;
-    // collapse // and strip trailing slash except root
     p = p.replace(/\/{2,}/g, '/');
     if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
     return p;

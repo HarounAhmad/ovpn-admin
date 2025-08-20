@@ -5,6 +5,7 @@
     type Issued = { serial?: string; cn: string; profile: string; not_after: string }
 
     let cn = ''
+    let passphrase = ''
     let include_key = true
     let creating = false
     let creatingErr = ''
@@ -15,13 +16,14 @@
 
     let issued: Issued[] = []
 
-    // NOTE: your api helper should prefix /api. If it doesn't, change to '/api/admin/issued?...'
+    let last = { cn: '', passphrase: '', serial: '', not_after: ''}
+    let isNew = false
+
     async function refreshIssued() {
         try {
             const list = await api.get<Issued[]>('/admin/issued?limit=50')
             issued = (list ?? []).sort((a, b) => a.cn.localeCompare(b.cn))
         } catch (e) {
-            // keep quiet on dashboard; you can surface if you prefer
             console.error('issued load failed', e)
             issued = []
         }
@@ -33,24 +35,22 @@
         creating = true
         creatingErr = ''
         try {
-            // Backend may return cn/profile/not_after. If not, we still insert optimistically.
-            const resp = await api.post<{ cn?: string; profile?: string; not_after?: string }>(
+            const resp = await api.post<{ cn?: string; profile?: string; not_after?: string; passphrase: string }>(
                 '/admin/clients',
-                { cn: newCN, include_key }
+                { cn: newCN, include_key, passphrase: passphrase.trim() || undefined}
             )
+            last = resp
+            isNew = true
             const row: Issued = {
                 cn: resp?.cn ?? newCN,
                 profile: resp?.profile ?? 'client',
                 not_after: resp?.not_after ?? '—',
             }
-            // Optimistic insert (dedupe by CN)
             issued = [row, ...issued.filter(i => i.cn !== row.cn)]
             cn = ''
+            passphrase = ''
 
-            // Optional: also refresh from server to pick up serial/real not_after
-            // await refreshIssued()
         } catch (e: any) {
-            // If your api wrapper exposes status codes, you can special-case 409 here.
             creatingErr = e?.message ?? String(e)
         } finally {
             creating = false
@@ -91,6 +91,7 @@
     <div class="card grid">
         <div class="row">
             <input class="input" placeholder="common name" bind:value={cn} />
+            <input class="input" placeholder="passphrase" bind:value={passphrase} />
             <label class="row"><input type="checkbox" bind:checked={include_key} /> include key</label>
             <button class="btn primary" disabled={creating || !cn.trim()} on:click|preventDefault={createClient}>
                 {creating ? 'Creating…' : 'Create'}
@@ -98,6 +99,22 @@
         </div>
         {#if creatingErr}<div class="muted">Error: {creatingErr}</div>{/if}
     </div>
+    {#if isNew}
+    <div class="card grid">
+        <h3>New Client</h3>
+        <div class="row">
+            <label>CN: {last.cn}</label>
+            <label>Passphrase: {last.passphrase}</label>
+            <label>Serial: {last.serial}</label>
+            <label>Not After: {last.not_after}</label>
+        </div>
+        <button
+                class="btn"
+                disabled={!isNew}
+                on:click={() => downloadBundle(last.cn || '')}
+        > Bundle </button>
+    </div>
+    {/if}
 
     <div class="card">
         <h3>Issued</h3>

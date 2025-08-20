@@ -41,7 +41,6 @@ async fn create_client(
     Json(req): Json<NewClient>,
 ) -> Result<Response, StatusCode> {
     guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
-
     match openvpn::create_client(&st, &req.cn, req.passphrase.as_deref()).await {
         Ok(res) => {
             let body = Json(ClientCreated {

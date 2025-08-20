@@ -1,4 +1,4 @@
-// minimal fetch w/ credentials + CSRF header
+
 function xsrf(): string | null {
     const m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : null;
@@ -16,11 +16,9 @@ function isJsonBody(b: unknown): boolean {
         && !(b instanceof Blob)
         && !(b instanceof ArrayBuffer)
         && !(b instanceof URLSearchParams)
-        // typed arrays
         && !(ArrayBuffer.isView(b as any));
 }
 
-// Core requester
 async function req(method: string, path: string, body?: any, expectBlob = false) {
     await ensureCsrf();
 
