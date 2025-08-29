@@ -1,13 +1,25 @@
 use axum::{middleware, routing::{get, post}, Json, Router};
+use axum::extract::State;
 use tower_http::set_header::SetResponseHeaderLayer;
-use axum::http::HeaderValue;
+use axum::http::{HeaderValue, StatusCode};
 use axum::response::Redirect;
-use serde_json::json;
-use crate::AppState;
+use serde_json::{json, Value};
+use crate::{openvpn, AppState};
 pub mod auth; pub mod guards; pub mod csrf; pub mod admin;
 
-async fn health() -> Json<serde_json::Value> {
-    Json(json!({ "ok": true }))
+pub async fn health(State(st): State<AppState>) -> Json<Value> {
+    let api_ok = true;
+
+    let daemon_ok = crate::vpncertd::health(&st.cfg.ovpn.socket_path)
+        .await
+        .is_ok();
+    let agent_ok = false;
+
+    Json(json!({
+        "api":    { "ok": api_ok },
+        "daemon": { "ok": daemon_ok },
+        "agent":  { "ok": agent_ok }
+    }))
 }
 
 async fn admin_ping(sess: guards::AuthSession) -> Result<&'static str, axum::http::StatusCode> {

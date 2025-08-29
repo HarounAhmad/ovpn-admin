@@ -1,24 +1,29 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import {api} from "../lib/api";
 
 
-    const fetchStatus = async (path: string): Promise<string> => {
-        const r = await fetch(`/api${path}`, { credentials: 'include' });
-        if (!r.ok) return 'down';
-
-        const ct = r.headers.get('content-type') ?? '';
-        if (ct.includes('application/json')) {
-            const j: any = await r.json().catch(() => ({}));
-            if (typeof j?.ok === 'boolean') return j.ok ? 'ok' : 'down';
-            if (typeof j?.status === 'string') return j.status.toLowerCase();
-            return 'ok';
-        } else {
-            const t = (await r.text()).trim().toLowerCase();
-            if (t === 'ok' || t === 'pong' || t === 'healthy') return 'ok';
-            if (!t) return 'down';
-            return t;
-        }
+    type Status = 'ok' | 'down';
+    type HealthPayload = {
+        api?: { ok: boolean };
+        daemon?: { ok: boolean };
+        agent?: { ok: boolean };
     };
+
+    export async function fetchStatus(): Promise<{ api: Status; daemon: Status; agent: Status }> {
+        const r = await fetch('/api/health', { credentials: 'include' });
+        if (!r.ok) return { api: 'NOK', daemon: 'NOK', agent: 'NOK' };
+
+        const j: HealthPayload = await r.json().catch(() => ({}));
+        const toStatus = (v: any): Status =>
+            v && typeof v.ok === 'boolean' ? (v.ok ? 'ok' : 'NOK') : 'NOK';
+
+        return {
+            api: toStatus(j.api),
+            daemon: toStatus(j.daemon),
+            agent: toStatus(j.agent),
+        };
+    }
 
     const cls = (s: string | null) => {
         const v = (s ?? '—').toLowerCase();
@@ -44,14 +49,16 @@
 
     onMount(async () => {
         try {
-            apiStatus = await fetchStatus('/health');
+            const h = await fetchStatus();
+            console.log(h)
+            apiStatus = h.api;
+            daemonStatus = h.daemon;
+            mgmtStatus = h.agent;
         } catch (e) {
-            apiStatus = 'down';
+            apiStatus = 'NOK';
             err ||= String(e);
         }
 
-        daemonStatus = apiStatus;
-        mgmtStatus = apiStatus;
 
         try {
             const r = await fetch('/api/me', { credentials: 'include' });
