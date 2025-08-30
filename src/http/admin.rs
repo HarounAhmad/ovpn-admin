@@ -67,17 +67,40 @@ async fn create_client(
         }
     }
 }
+
+
 async fn revoke_client(
     State(st): State<AppState>,
     sess: AuthSession,
     Path(cn): Path<String>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<Response, StatusCode> {
     guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
-    openvpn::revoke_client(&st, &cn)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
+
+    match openvpn::revoke_client(&st, &cn).await {
+        Ok(()) => Ok(StatusCode::NO_CONTENT.into_response()),
+        Err(e) => {
+            let msg = e.to_string();
+
+            let resp = if msg.to_lowercase().contains("invalid cn") {
+                (StatusCode::UNPROCESSABLE_ENTITY, Json(ErrorMsg { error: "invalid_cn".into() })).into_response()
+            } else if msg.to_lowercase().contains("not_found")
+                || msg.to_lowercase().contains("no such")
+                || msg.to_lowercase().contains("unknown")
+            {
+                (StatusCode::NOT_FOUND, Json(ErrorMsg { error: "cn_not_found".into() })).into_response()
+            } else if msg.to_lowercase().contains("already") && msg.to_lowercase().contains("revoke") {
+                (StatusCode::CONFLICT, Json(ErrorMsg { error: "already_revoked".into() })).into_response()
+            } else {
+                tracing::error!(%cn, error=%msg, "revoke_client failed");
+                (StatusCode::BAD_GATEWAY, Json(ErrorMsg { error: "daemon_error".into() })).into_response()
+            };
+
+            Ok(resp)
+        }
+    }
 }
+
+
 
 async fn bundle(
     State(st): State<AppState>,

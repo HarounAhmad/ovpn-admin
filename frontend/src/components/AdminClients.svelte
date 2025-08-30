@@ -14,6 +14,10 @@
     let bundleCN = ''
     let bundleErr = ''
 
+    let revoking = false
+    let revokeCN = ''
+    let revokeErr = ''
+
     let issued: Issued[] = []
 
     let last = { cn: '', passphrase: '', serial: '', not_after: ''}
@@ -82,6 +86,17 @@
         }
     }
 
+    async function revokeClient(cn: string) {
+        if (!confirm(`Revoke certificate for "${cn}"? This cannot be undone.`)) return
+        revoking = true; revokeErr = ''; revokeCN = cn
+        try {
+            await api.post(`/admin/clients/${encodeURIComponent(cn)}/revoke`, {})
+            await refreshIssued()
+        } catch (e) {
+            revokeErr = String(e)
+        } finally { revoking = false; revokeCN = '' }
+    }
+
     onMount(refreshIssued)
 </script>
 
@@ -139,6 +154,12 @@
                             >
                                 {issuing && bundleCN === it.cn ? 'Bundling…' : 'Bundle'}
                             </button>
+                            <button
+                                    class="btn danger"
+                                    disabled={issuing || revoking}
+                                    on:click={() => revokeClient(it.cn)}
+                                    aria-busy={revoking && revokeCN===it.cn}
+                                    >Revoke</button>
                         </td>
                     </tr>
                 {/each}

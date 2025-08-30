@@ -95,8 +95,31 @@ pub async fn health(socket: &str) -> Result<()> {
 }
 
 
-pub async fn revoke(socket: &str, cn: &str) -> Result<()> {
-    let req = json!({ "op": "REVOKE", "cn": cn });
+fn looks_like_serial(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+}
+
+
+pub async fn revoke(socket: &str, id: &str) -> Result<()> {
+    let serial = if looks_like_serial(id) {
+        id.to_string()
+    } else {
+        let issued = list_issued(socket, None).await?;
+        let mut candidates: Vec<&IssuedMeta> = issued.iter().filter(|it| it.cn == id).collect();
+        if candidates.is_empty() {
+            return Err(anyhow!("not_found: cn"));
+        }
+        // prefer highest numeric serial when multiple exist
+        candidates.sort_by_key(|it| it.serial.parse::<u128>().unwrap_or(0));
+        let last = candidates.last().unwrap();
+        last.serial.clone()
+    };
+
+    let req = json!({
+        "op": "REVOKE",
+        "serial": serial,
+        "reason": "keyCompromise",
+    });
     let _ = call_raw(socket, &req).await?;
     Ok(())
 }

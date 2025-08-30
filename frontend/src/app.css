@@ -175,3 +175,6 @@ h2, h3 { margin: 0 0 4px 0; }
 .table th, .table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #1f2937; }
 .table thead th { font-weight: 700; color: #e5e7eb; background: #0b0f14; position: sticky; top: 0; }
 .ua { max-width: 480px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn.danger { background: #c62828; color: #fff; }
+.btn[aria-busy="true"] { opacity: .7; pointer-events: none; }
