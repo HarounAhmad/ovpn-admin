@@ -146,14 +146,26 @@ pub async fn build_bundle(
     Ok(())
 }
 
+pub async fn get_crl(socket: &str) -> Result<String> {
+    let v = call_raw(socket, &json!({ "op": "GET_CRL" })).await?;
+    let pem = v
+        .get("crl_pem")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| anyhow!("missing crl_pem in daemon response"))?;
+    Ok(pem.to_string())
+}
+
 pub async fn list_issued(socket: &str, limit: Option<usize>) -> Result<Vec<IssuedMeta>> {
-    let req = json!({ "op": "LIST_ISSUED" });
-    let v = call_raw(socket, &req).await?;
-    let mut list: Vec<IssuedMeta> = serde_json::from_value(
-        v.get("issued").cloned().unwrap_or(Value::Array(vec![]))
-    )?;
+    let v = call_raw(socket, &json!({ "op": "LIST_ISSUED" })).await?;
+    let issued_v = v
+        .get("issued")
+        .cloned()
+        .ok_or_else(|| anyhow!("missing issued in daemon response"))?;
+    let mut rows: Vec<IssuedMeta> = serde_json::from_value(issued_v)?;
     if let Some(n) = limit {
-        if list.len() > n { list.truncate(n); }
+        if rows.len() > n {
+            rows.truncate(n);
+        }
     }
-    Ok(list)
+    Ok(rows)
 }

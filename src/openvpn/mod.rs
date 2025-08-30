@@ -11,8 +11,9 @@ use axum::http::{HeaderMap, HeaderValue};
 use tokio::{fs, io::AsyncWriteExt};
 use tokio_util::io::ReaderStream;
 use ulid::Ulid;
-
-
+use openssl::{x509::X509Crl, asn1::Asn1Time};
+use std::collections::HashMap;
+use openssl::asn1::Asn1TimeRef;
 
 fn cn_ok(re: &Regex, cn: &str) -> bool {
     re.is_match(cn)
@@ -26,6 +27,16 @@ pub struct ClientIssue {
     pub key_pem_encrypted: String,
     pub serial: Option<String>,
     pub not_after: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct IssuedWithStatus {
+    pub serial: String,
+    pub cn: String,
+    pub profile: String,
+    pub not_after: String,
+    pub revoked: bool,
+    pub revoked_at: Option<String>,
 }
 
 pub async fn create_client(st: &AppState, cn: &str, passphrase: Option<&str>) -> Result<ClientIssue> {
@@ -138,4 +149,69 @@ pub async fn write_ccd(st: &AppState, cn: &str, content: &str) -> Result<()> {
         .ok();
     Ok(())
 }
+
+
+
+
+fn dec_to_hex_upper(s: &str) -> Result<String> {
+    let n: u128 = s.parse()?;
+    Ok(format!("{:X}", n))
+}
+fn asn1_to_string(t: &Asn1TimeRef) -> String {
+    t.to_string()
+}
+
+async fn crl_revoked_map_dec(st: &AppState) -> Result<HashMap<String, String>> {
+    let pem = vpncertd::get_crl(&st.cfg.ovpn.socket_path).await?;
+    let crl = X509Crl::from_pem(pem.as_bytes())?;
+
+    let mut m = HashMap::new();
+    if let Some(all) = crl.get_revoked() {
+        for r in all {
+            let dec = r.serial_number().to_bn()?.to_dec_str()?.to_string();
+            let when = r.revocation_date().to_string();
+            m.insert(dec, when);
+        }
+    }
+    Ok(m)
+}
+
+
+async fn revoked_hex_map_via_crl(st: &crate::AppState) -> Result<HashMap<String, String>> {
+    let pem = crate::vpncertd::get_crl(&st.cfg.ovpn.socket_path).await?;
+    let crl = X509Crl::from_pem(pem.as_bytes())
+        .map_err(|e| anyhow!("parse CRL PEM: {e}"))?;
+    let mut map = HashMap::new();
+    if let Some(list) = crl.get_revoked() {
+        for r in list {
+            let hex = r.serial_number().to_bn()?.to_hex_str()?.to_string().to_uppercase();
+            map.insert(hex, asn1_to_string(r.revocation_date()));
+        }
+    }
+    Ok(map)
+}
+
+
+
+pub async fn list_issued_with_status(st: &AppState, limit: Option<usize>) -> Result<Vec<IssuedWithStatus>> {
+    let issued = vpncertd::list_issued(&st.cfg.ovpn.socket_path, limit).await?;
+    let rev = crl_revoked_map_dec(st).await.unwrap_or_default();
+
+    let out = issued
+        .into_iter()
+        .map(|it| {
+            let revoked_at = rev.get(&it.serial).cloned();
+            IssuedWithStatus {
+                serial: it.serial,
+                cn: it.cn,
+                profile: it.profile,
+                not_after: it.not_after,
+                revoked: revoked_at.is_some(),
+                revoked_at,
+            }
+        })
+        .collect();
+    Ok(out)
+}
+
 

@@ -180,9 +180,9 @@ pub async fn issued(
     State(st): State<AppState>,
     sess: guards::AuthSession,
     Query(q): Query<IssuedQ>,
-) -> Result<Json<Vec<vpncertd::IssuedMeta>>, StatusCode> {
+) -> Result<Json<Vec<openvpn::IssuedWithStatus>>, StatusCode> {
     guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
-    let list = vpncertd::list_issued(&st.cfg.ovpn.socket_path, q.limit)
+    let list = openvpn::list_issued_with_status(&st, q.limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(list))

@@ -2,7 +2,7 @@
     import { api } from '../lib/api'
     import { onMount } from 'svelte'
 
-    type Issued = { serial?: string; cn: string; profile: string; not_after: string }
+    type Issued = { serial?: string; cn: string; profile: string; not_after: string, revoked?: boolean, revoked_at?: string}
 
     let cn = ''
     let passphrase = ''
@@ -138,7 +138,7 @@
         {:else}
             <table class="table">
                 <thead>
-                <tr><th style="text-align:left">CN</th><th>Profile</th><th>Not After</th><th></th></tr>
+                <tr><th style="text-align:left">CN</th><th>Profile</th><th>Not After</th><th>Revoked</th><th></th></tr>
                 </thead>
                 <tbody>
                 {#each issued as it}
@@ -146,6 +146,16 @@
                         <td>{it.cn}</td>
                         <td class="muted">{it.profile}</td>
                         <td class="muted">{it.not_after}</td>
+                        <td class="muted">
+                            {#if it.revoked}
+                            <span class="badge err">revoked</span>
+                            {#if it.revoked_at}
+                                <span class="muted" style="margin-left:6px">{it.revoked_at}</span>
+                            {/if}
+                        {:else}
+                            <span class="badge ok">active</span>
+                        {/if}
+                        </td>
                         <td style="text-align:right">
                             <button
                                     class="btn"
@@ -156,7 +166,7 @@
                             </button>
                             <button
                                     class="btn danger"
-                                    disabled={issuing || revoking}
+                                    disabled={issuing || revoking || it.revoked}
                                     on:click={() => revokeClient(it.cn)}
                                     aria-busy={revoking && revokeCN===it.cn}
                                     >Revoke</button>
