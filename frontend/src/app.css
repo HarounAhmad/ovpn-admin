@@ -178,3 +178,61 @@ h2, h3 { margin: 0 0 4px 0; }
 
 .btn.danger { background: #c62828; color: #fff; }
 .btn[aria-busy="true"] { opacity: .7; pointer-events: none; }
+
+
+.ccd .ccd-grid {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .ccd .ccd-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ccd aside.card {
+    display: flex;
+    flex-direction: column;
+}
+
+.ccd aside.card > .row {
+    position: sticky;
+    top: 0;
+    background: inherit;
+    padding-bottom: 6px;
+    z-index: 1;
+}
+
+.ccd .list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    overflow: auto;
+    max-height: calc(100vh - 220px);
+}
+
+.ccd .list-item.active { outline: none; }
+
+.ccd .list-item {
+    border: 1px solid transparent;
+    padding: 10px;
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+
+.ccd .list-item.active,
+.ccd .list-item:focus-visible {
+    border-color: var(--accent, #2563eb);
+    background: rgba(37,99,235,0.08);
+}
+
+.ccd .cn { font-weight: 600; }
+.ccd .meta { font-size: 0.85rem; }
+
+.ccd textarea.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}

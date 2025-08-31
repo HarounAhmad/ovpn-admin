@@ -1,8 +1,25 @@
 <script lang="ts">
-    import { api } from '../lib/api'
     import { onMount } from 'svelte'
+    import { api } from '../lib/api'
+    import { goto } from '../lib/hashRouter'
 
-    type Issued = { serial?: string; cn: string; profile: string; not_after: string, revoked?: boolean, revoked_at?: string}
+    type Issued = {
+        serial?: string
+        cn: string
+        profile: string
+        not_after: string
+        revoked?: boolean
+        revoked_at?: string | null
+    }
+
+    type CreateResp = {
+        cn: string
+        profile?: string
+        not_after?: string
+        passphrase: string
+        serial?: string
+        cdc?: string
+    }
 
     let cn = ''
     let passphrase = ''
@@ -19,8 +36,11 @@
     let revokeErr = ''
 
     let issued: Issued[] = []
+    let ccd;
 
-    let last = { cn: '', passphrase: '', serial: '', not_after: ''}
+    let last: { cn: string; passphrase: string; serial?: string; not_after?: string } = {
+        cn: '', passphrase: '', serial: '', not_after: ''
+    }
     let isNew = false
 
     async function refreshIssued() {
@@ -39,21 +59,32 @@
         creating = true
         creatingErr = ''
         try {
-            const resp = await api.post<{ cn?: string; profile?: string; not_after?: string; passphrase: string }>(
-                '/admin/clients',
-                { cn: newCN, include_key, passphrase: passphrase.trim() || undefined}
-            )
-            last = resp
+            const resp = await api.post<CreateResp>('/admin/clients', {
+                cn: newCN,
+                include_key,
+                passphrase: passphrase.trim() || undefined,
+                ccd: ccd?.trim() || undefined
+            })
+
+            last = {
+                cn: resp?.cn ?? newCN,
+                passphrase: resp?.passphrase ?? '',
+                serial: resp?.serial ?? '',
+                not_after: resp?.not_after ?? '',
+                ccd: resp?.ccd ?? ''
+            }
             isNew = true
+
             const row: Issued = {
                 cn: resp?.cn ?? newCN,
                 profile: resp?.profile ?? 'client',
                 not_after: resp?.not_after ?? '—',
+                revoked: false
             }
             issued = [row, ...issued.filter(i => i.cn !== row.cn)]
+
             cn = ''
             passphrase = ''
-
         } catch (e: any) {
             creatingErr = e?.message ?? String(e)
         } finally {
@@ -86,15 +117,24 @@
         }
     }
 
-    async function revokeClient(cn: string) {
-        if (!confirm(`Revoke certificate for "${cn}"? This cannot be undone.`)) return
-        revoking = true; revokeErr = ''; revokeCN = cn
+    async function revokeClient(name: string) {
+        if (!confirm(`Revoke certificate for "${name}"? This cannot be undone.`)) return
+        revoking = true
+        revokeErr = ''
+        revokeCN = name
         try {
-            await api.post(`/admin/clients/${encodeURIComponent(cn)}/revoke`, {})
+            await api.post(`/admin/clients/${encodeURIComponent(name)}/revoke`, {})
             await refreshIssued()
         } catch (e) {
             revokeErr = String(e)
-        } finally { revoking = false; revokeCN = '' }
+        } finally {
+            revoking = false
+            revokeCN = ''
+        }
+    }
+
+    function openCcd(name: string) {
+        goto(`/ccd/${encodeURIComponent(name)}`)
     }
 
     onMount(refreshIssued)
@@ -104,78 +144,106 @@
     <h2>Clients</h2>
 
     <div class="card grid">
-        <div class="row">
+        <div class="row wrap">
             <input class="input" placeholder="common name" bind:value={cn} />
-            <input class="input" placeholder="passphrase" bind:value={passphrase} />
+            <input class="input" placeholder="passphrase (optional)" bind:value={passphrase} />
             <label class="row"><input type="checkbox" bind:checked={include_key} /> include key</label>
             <button class="btn primary" disabled={creating || !cn.trim()} on:click|preventDefault={createClient}>
                 {creating ? 'Creating…' : 'Create'}
             </button>
         </div>
-        {#if creatingErr}<div class="muted">Error: {creatingErr}</div>{/if}
-    </div>
-    {#if isNew}
-    <div class="card grid">
-        <h3>New Client</h3>
-        <div class="row">
-            <label>CN: {last.cn}</label>
-            <label>Passphrase: {last.passphrase}</label>
-            <label>Serial: {last.serial}</label>
-            <label>Not After: {last.not_after}</label>
+        <div class="row wrap">
+            <input class="input" placeholder="ccd" bind:value={ccd} />
         </div>
-        <button
-                class="btn"
-                disabled={!isNew}
-                on:click={() => downloadBundle(last.cn || '')}
-        > Bundle </button>
+        {#if creatingErr}<div class="msg err">Error: {creatingErr}</div>{/if}
     </div>
+
+    {#if isNew}
+        <div class="card">
+            <h3>New client</h3>
+            <div class="last-grid">
+                <div><span class="muted">CN</span><div class="kv">{last.cn}</div></div>
+                <div><span class="muted">Passphrase</span><div class="kv mono">{last.passphrase || '—'}</div></div>
+                <div><span class="muted">Serial</span><div class="kv mono">{last.serial || '—'}</div></div>
+                <div><span class="muted">Not After</span><div class="kv">{last.not_after || '—'}</div></div>
+                <div><span class="muted">ccd</span><div class="kv">{last.ccd || '—'}</div></div>
+            </div>
+            <div class="actions">
+                <button class="btn" on:click={() => downloadBundle(last.cn)} disabled={!last.cn}>Bundle</button>
+                <button class="btn" on:click={() => openCcd(last.cn)} disabled={!last.cn}>Edit CCD</button>
+            </div>
+        </div>
     {/if}
 
     <div class="card">
-        <h3>Issued</h3>
+        <div class="row between">
+            <h3>Issued</h3>
+            <div class="row gap">
+                <button class="btn" on:click={refreshIssued}>Refresh</button>
+            </div>
+        </div>
+
         {#if issued.length === 0}
             <div class="muted">No certificates yet.</div>
         {:else}
             <table class="table">
                 <thead>
-                <tr><th style="text-align:left">CN</th><th>Profile</th><th>Not After</th><th>Revoked</th><th></th></tr>
+                <tr>
+                    <th class="left">CN</th>
+                    <th>Profile</th>
+                    <th>Not After</th>
+                    <th>Status</th>
+                    <th class="right"></th>
+                </tr>
                 </thead>
                 <tbody>
                 {#each issued as it}
                     <tr>
-                        <td>{it.cn}</td>
+                        <td class="left">{it.cn}</td>
                         <td class="muted">{it.profile}</td>
                         <td class="muted">{it.not_after}</td>
-                        <td class="muted">
+                        <td>
                             {#if it.revoked}
-                            <span class="badge err">revoked</span>
-                            {#if it.revoked_at}
-                                <span class="muted" style="margin-left:6px">{it.revoked_at}</span>
+                                <span class="badge err">revoked</span>
+                                {#if it.revoked_at}
+                                    <span class="muted small">{it.revoked_at}</span>
+                                {/if}
+                            {:else}
+                                <span class="badge ok">active</span>
                             {/if}
-                        {:else}
-                            <span class="badge ok">active</span>
-                        {/if}
                         </td>
-                        <td style="text-align:right">
+                        <td class="right actions">
                             <button
                                     class="btn"
-                                    disabled={issuing && bundleCN === it.cn}
+                                    disabled={(issuing && bundleCN === it.cn) || it.revoked}
                                     on:click={() => downloadBundle(it.cn)}
                             >
                                 {issuing && bundleCN === it.cn ? 'Bundling…' : 'Bundle'}
                             </button>
+
+                            <button
+                                    class="btn"
+                                    on:click={() => openCcd(it.cn)}
+                            >
+                                Edit CCD
+                            </button>
+
                             <button
                                     class="btn danger"
                                     disabled={issuing || revoking || it.revoked}
                                     on:click={() => revokeClient(it.cn)}
                                     aria-busy={revoking && revokeCN===it.cn}
-                                    >Revoke</button>
+                            >
+                                {revoking && revokeCN===it.cn ? 'Revoking…' : 'Revoke'}
+                            </button>
                         </td>
                     </tr>
                 {/each}
                 </tbody>
             </table>
         {/if}
-        {#if bundleErr}<div class="muted">Error: {bundleErr}</div>{/if}
+
+        {#if bundleErr}<div class="msg err">Bundle error: {bundleErr}</div>{/if}
+        {#if revokeErr}<div class="msg err">Revoke error: {revokeErr}</div>{/if}
     </div>
 </section>

@@ -10,7 +10,7 @@ use axum::extract::Query;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
-use crate::{http::guards, openvpn, vpncertd, AppState};
+use crate::{db, http::guards, openvpn, vpncertd, AppState};
 use crate::http::guards::AuthSession;
 
 #[derive(Deserialize)]
@@ -18,6 +18,7 @@ struct NewClient {
     cn: String,
     passphrase: Option<String>,
     include_key: Option<bool>,
+    ccd: Option<String>,
 }
 #[derive(Deserialize, Default)]
 struct BundleReq {
@@ -43,12 +44,21 @@ async fn create_client(
     guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
     match openvpn::create_client(&st, &req.cn, req.passphrase.as_deref()).await {
         Ok(res) => {
+            if let Some(ccd_text) = req.ccd.as_deref() {
+                if let Err(e) = openvpn::write_ccd(&st, &res.cn, ccd_text).await {
+                    tracing::error!("save CCD after create ({}): {}", res.cn, e);
+                } else {
+                    let _ = db::audit_record(&st.db, "", "ADMIN_SAVE_CCD", &res.cn, "-", "-", "{}").await;
+                }
+            }
+
             let body = Json(ClientCreated {
-                cn: res.cn,
-                passphrase: res.passphrase,
-                serial: res.serial,
+                cn:        res.cn,
+                passphrase:res.passphrase,
+                serial:    res.serial,
                 not_after: res.not_after,
             });
+
             let mut resp = body.into_response();
             *resp.status_mut() = StatusCode::CREATED;
             Ok(resp)
@@ -143,6 +153,14 @@ struct CcdDto {
     content: String,
 }
 
+#[derive(Serialize)]
+struct CcdListItem {
+    cn: String,
+    size: u64,
+    modified: i64,
+}
+
+
 async fn get_ccd(
     State(st): State<AppState>,
     sess: AuthSession,
@@ -173,6 +191,21 @@ async fn put_ccd(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn list_ccd(
+    State(st): State<AppState>,
+    sess: guards::AuthSession,
+) -> Result<Json<Vec<CcdListItem>>, StatusCode> {
+    guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
+    let v = openvpn::list_ccd(&st)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        v.into_iter()
+            .map(|m| CcdListItem { cn: m.cn, size: m.size, modified: m.modified })
+            .collect(),
+    ))
+}
+
 #[derive(Deserialize)]
 struct IssuedQ { limit: Option<usize> }
 
@@ -194,6 +227,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/clients", post(create_client))
         .route("/admin/clients/:cn/revoke", post(revoke_client))
         .route("/admin/clients/:cn/bundle", post(bundle))
+        .route("/admin/ccd", get(list_ccd))
         .route("/admin/ccd/:cn", get(get_ccd).put(put_ccd))
 }
 
