@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 use std::path::Path;
 use base64::Engine;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::UnixStream,
@@ -32,6 +32,16 @@ struct IssueWire {
     key_pem_encrypted: String,
     #[serde(default)] serial: Option<String>,
     #[serde(default)] not_after: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssuedMeta {
+    pub serial: String,
+    pub cn: String,
+    pub profile: String,
+    pub not_after: String,
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 pub struct IssueReply {
@@ -85,8 +95,31 @@ pub async fn health(socket: &str) -> Result<()> {
 }
 
 
-pub async fn revoke(socket: &str, cn: &str) -> Result<()> {
-    let req = json!({ "op": "REVOKE", "cn": cn });
+fn looks_like_serial(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())
+}
+
+
+pub async fn revoke(socket: &str, id: &str) -> Result<()> {
+    let serial = if looks_like_serial(id) {
+        id.to_string()
+    } else {
+        let issued = list_issued(socket, None).await?;
+        let mut candidates: Vec<&IssuedMeta> = issued.iter().filter(|it| it.cn == id).collect();
+        if candidates.is_empty() {
+            return Err(anyhow!("not_found: cn"));
+        }
+        // prefer highest numeric serial when multiple exist
+        candidates.sort_by_key(|it| it.serial.parse::<u128>().unwrap_or(0));
+        let last = candidates.last().unwrap();
+        last.serial.clone()
+    };
+
+    let req = json!({
+        "op": "REVOKE",
+        "serial": serial,
+        "reason": "keyCompromise",
+    });
     let _ = call_raw(socket, &req).await?;
     Ok(())
 }
@@ -111,4 +144,28 @@ pub async fn build_bundle(
     });
     let _ = call_raw(socket, &req).await?;
     Ok(())
+}
+
+pub async fn get_crl(socket: &str) -> Result<String> {
+    let v = call_raw(socket, &json!({ "op": "GET_CRL" })).await?;
+    let pem = v
+        .get("crl_pem")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| anyhow!("missing crl_pem in daemon response"))?;
+    Ok(pem.to_string())
+}
+
+pub async fn list_issued(socket: &str, limit: Option<usize>) -> Result<Vec<IssuedMeta>> {
+    let v = call_raw(socket, &json!({ "op": "LIST_ISSUED" })).await?;
+    let issued_v = v
+        .get("issued")
+        .cloned()
+        .ok_or_else(|| anyhow!("missing issued in daemon response"))?;
+    let mut rows: Vec<IssuedMeta> = serde_json::from_value(issued_v)?;
+    if let Some(n) = limit {
+        if rows.len() > n {
+            rows.truncate(n);
+        }
+    }
+    Ok(rows)
 }
