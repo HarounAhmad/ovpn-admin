@@ -11,7 +11,7 @@ use axum::http::{HeaderMap, HeaderValue};
 use tokio::{fs, io::AsyncWriteExt};
 use tokio_util::io::ReaderStream;
 use ulid::Ulid;
-use openssl::{x509::X509Crl, asn1::Asn1Time};
+use openssl::{x509::X509Crl};
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 use openssl::asn1::Asn1TimeRef;
@@ -184,11 +184,6 @@ pub async fn write_ccd(st: &AppState, cn: &str, content: &str) -> Result<()> {
 }
 
 
-
-fn dec_to_hex_upper(s: &str) -> Result<String> {
-    let n: u128 = s.parse()?;
-    Ok(format!("{:X}", n))
-}
 fn asn1_to_string(t: &Asn1TimeRef) -> String {
     t.to_string()
 }
