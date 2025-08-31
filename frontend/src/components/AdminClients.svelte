@@ -153,7 +153,7 @@
             </button>
         </div>
         <div class="row wrap">
-            <input class="input" placeholder="ccd" bind:value={ccd} />
+            <input class="input" placeholder="ifconfig-push 10.10.10.10 255.255.255.0" bind:value={ccd} />
         </div>
         {#if creatingErr}<div class="msg err">Error: {creatingErr}</div>{/if}
     </div>
