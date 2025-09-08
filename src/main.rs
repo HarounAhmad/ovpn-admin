@@ -17,17 +17,6 @@ use tokio::sync::RwLock;
 use crate::openvpn::mgmt::MgmtState;
 
 #[derive(Clone)]
-pub struct MgmtClientRow {
-    pub cn: String,
-    pub real_ip: String,
-    pub vpn_ip: String,
-    pub bytes_in: u64,
-    pub bytes_out: u64,
-    pub connected_since: String,
-}
-
-
-#[derive(Clone)]
 pub struct AppState {
     pub cfg: Arc<AppCfg>,
     pub pepper: Arc<Vec<u8>>,

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use std::{sync::Arc, time::Duration};
-use tokio::{net::TcpStream, io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, time::sleep};
 use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
@@ -164,7 +164,6 @@ fn parse_status_csv(s: &str) -> Vec<MgmtClientRow> {
     out
 }
 
-
 #[derive(Debug)]
 pub enum KickTarget {
     ById(u32),
@@ -185,7 +184,6 @@ pub async fn kick(m: &MgmtState, target: KickTarget) -> Result<()> {
             format!("kill {}\n", id)
         }
     };
-
 
     let path = m.addr.to_owned();
 
@@ -215,7 +213,4 @@ pub async fn kick(m: &MgmtState, target: KickTarget) -> Result<()> {
     } else {
         Ok(())
     }
-
-
-
 }
