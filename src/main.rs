@@ -5,6 +5,7 @@ mod security;
 mod vpncertd;
 mod openvpn;
 mod web;
+use crate::openvpn::mgmt;
 
 use crate::config::AppCfg;
 use axum::Router;
@@ -12,12 +13,15 @@ use clap::{Parser, Subcommand};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
+use crate::openvpn::mgmt::MgmtState;
 
 #[derive(Clone)]
 pub struct AppState {
     pub cfg: Arc<AppCfg>,
     pub pepper: Arc<Vec<u8>>,
     pub db: db::Db,
+    pub mgmt: Option<MgmtState>,
 }
 
 #[derive(Parser)]
@@ -51,7 +55,19 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let state = AppState { cfg: cfg.clone(), pepper, db };
+    let mgmt_state = cfg
+        .mgmt
+        .as_ref()
+        .and_then(|m| m.enabled.then(|| mgmt::start(m.socket.clone(), m.poll_secs)));
+
+
+    let state = AppState {
+        cfg: cfg.clone(),
+        pepper,
+        db,
+        mgmt: mgmt_state,
+    };
+
     let app = http::router().with_state(state);
 
     let addr: std::net::SocketAddr = cfg.server.bind.parse()?;
@@ -60,6 +76,4 @@ async fn main() -> anyhow::Result<()> {
         .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .await?;
     Ok(())
-
-
 }

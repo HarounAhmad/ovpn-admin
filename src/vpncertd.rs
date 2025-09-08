@@ -109,7 +109,6 @@ pub async fn revoke(socket: &str, id: &str) -> Result<()> {
         if candidates.is_empty() {
             return Err(anyhow!("not_found: cn"));
         }
-        // prefer highest numeric serial when multiple exist
         candidates.sort_by_key(|it| it.serial.parse::<u128>().unwrap_or(0));
         let last = candidates.last().unwrap();
         last.serial.clone()

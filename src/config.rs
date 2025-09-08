@@ -19,6 +19,7 @@ pub struct AppCfg {
     pub server: ServerCfg,
     pub db: DbCfg,
     pub ovpn: Ovpn,
+    pub mgmt: Option<MgmtCfg>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -32,6 +33,13 @@ pub struct Ovpn {
     pub bundle_port: u16,
     pub bundle_proto: String,
     pub bundles_dir: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MgmtCfg {
+    pub enabled: bool,
+    pub socket: String,
+    pub poll_secs: u64,
 }
 
 impl AppCfg {

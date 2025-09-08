@@ -10,7 +10,7 @@ use axum::extract::Query;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
-use crate::{db, http::guards, openvpn, vpncertd, AppState};
+use crate::{db, http::guards, openvpn, vpncertd, AppState, openvpn::mgmt};
 use crate::http::guards::AuthSession;
 
 #[derive(Deserialize)]
@@ -221,6 +221,38 @@ pub async fn issued(
     Ok(Json(list))
 }
 
+async fn list_clients(
+    State(st): State<AppState>,
+    sess: guards::AuthSession,
+) -> Result<Json<Vec<mgmt::MgmtClientRow>>, StatusCode> {
+    guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
+    let mg = st.mgmt.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let rows = mg.snapshot().read().await.clone();
+    Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+struct KickReq {
+    cn: Option<String>,
+    client_id: Option<u32>,
+}
+
+async fn kick_client(
+    State(st): State<AppState>,
+    sess: guards::AuthSession,
+    Json(req): Json<KickReq>,
+) -> Result<StatusCode, StatusCode> {
+    guards::ensure_role(&sess, &["ADMIN"]).map_err(|_| StatusCode::FORBIDDEN)?;
+    let mg = st.mgmt.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let target = match (req.client_id, req.cn) {
+        (Some(id), _) => mgmt::KickTarget::ById(id),
+        (None, Some(cn)) if !cn.is_empty() => mgmt::KickTarget::ByCn(cn),
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+    mgmt::kick(mg, target).await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/admin/issued", axum::routing::get(issued))
@@ -229,5 +261,7 @@ pub fn routes() -> Router<AppState> {
         .route("/admin/clients/:cn/bundle", post(bundle))
         .route("/admin/ccd", get(list_ccd))
         .route("/admin/ccd/:cn", get(get_ccd).put(put_ccd))
+        .route("/admin/mgmt/clients", get(list_clients))
+        .route("/admin/mgmt/clients/kick", post(kick_client))
 }
 

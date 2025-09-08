@@ -13,8 +13,10 @@ pub async fn health(State(st): State<AppState>) -> Json<Value> {
     let daemon_ok = crate::vpncertd::health(&st.cfg.ovpn.socket_path)
         .await
         .is_ok();
-    let agent_ok = false;
-
+    let agent_ok = match &st.cfg.mgmt {
+        Some(m) if m.enabled => crate::openvpn::mgmt::health(&m.socket).await,
+        _ => false,
+    };
     Json(json!({
         "api":    { "ok": api_ok },
         "daemon": { "ok": daemon_ok },
