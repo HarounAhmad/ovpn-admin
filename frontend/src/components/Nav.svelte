@@ -8,6 +8,7 @@
     <a href="#/clients">Clients</a>
     <a href="#/ccd">CCD</a>
     <a href="#/audit">Audit</a>
+    <a href="#/connections">Connections</a>
     <div style="flex:1"></div>
     {#if $session}<span class="muted">{$session.username}</span>{/if}
     <button class="btn" on:click={logout}>Logout</button>

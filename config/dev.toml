@@ -15,3 +15,8 @@ bundle_remote   = "vpn.erisdev.io"
 bundle_port     = 1194
 bundle_proto    = "udp"
 bundles_dir     = "/home/haroun/openvpntest/bundles"
+
+[mgmt]
+enabled = true
+socket = "/tmp/openvpn-mock.sock"
+poll_secs = 5

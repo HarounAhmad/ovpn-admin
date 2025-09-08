@@ -1,3 +1,5 @@
+pub(crate) mod mgmt;
+
 use crate::{db, vpncertd, AppState};
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
@@ -15,6 +17,7 @@ use openssl::{x509::X509Crl};
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 use openssl::asn1::Asn1TimeRef;
+
 
 fn cn_ok(re: &Regex, cn: &str) -> bool {
     re.is_match(cn)
