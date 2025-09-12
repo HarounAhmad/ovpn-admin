@@ -87,7 +87,7 @@ High-level dataflow:
   - Roles: `ADMIN`, `OPS`, `READONLY` (today, admin-only for sensitive endpoints)
   - Server checks roles via middleware extractors before executing handlers
 - Security Headers (via tower-http)
-  - CSP: self for scripts, unsafe-inline for styles; images self+data
+  - CSP: self for scripts, no inline styles; images self+data
   - Referrer-Policy: no-referrer
   - X-Content-Type-Options: nosniff
   - X-Frame-Options: DENY
@@ -110,7 +110,7 @@ Auth and Session
 - `GET /me` → 200 `{ "username": "...", "roles": ["ADMIN", ...] }` or 401
 
 Health
-- `GET /health` → 200 `{ "api": {"ok": true}, "daemon": {"ok": bool}, "agent": {"ok": bool} }`
+- `GET /health` → 200 `{ "api": {"ok": true}, "daemon": {"ok": bool}, "mgmt": {"ok": bool} }`
 
 Admin – Certificates (ADMIN only)
 - `POST /admin/clients`
@@ -290,7 +290,7 @@ Note: Without a running vpn-certd at the configured socket, health checks and al
 
 ```bash
 # Create user and assign role
-cargo run -- user-add --username <USER> --role <ADMIN|AUDIT>
+cargo run -- user-add --username <USER> --role <ADMIN|OPS|READONLY>
 ```
 
 Interactive password prompt is displayed; the user is created and role assigned.
@@ -316,6 +316,74 @@ Interactive password prompt is displayed; the user is created and role assigned.
 └── var/ovpn-admin.sqlite  # default SQLite path (dev)
 ```
 
+## Deployment
+
+### Install
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin ovpn-admin || true
+sudo groupadd openvpn-access || true
+sudo usermod -aG openvpn-access ovpn-admin
+
+sudo mkdir -p /opt/ovpn-admin
+sudo cp target/release/ovpn-admin /opt/ovpn-admin/
+sudo cp -r webui-dist config migrations /opt/ovpn-admin/
+sudo cp contrib/ovpn-admin.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ovpn-admin
+sudo systemctl status ovpn-admin
+```
+
+### Permissions & Sockets
+    
+Ensure the `ovpn-admin` user can read the pepper file, read/write the SQLite DB, and read/write the CCD and bundles directories. Also ensure it can access the vpn-certd and OpenVPN mgmt sockets (usually via group membership).
+```bash
+# Pepper and DB
+sudo install -m 600 -o ovpn-admin -g openvpn-access dev.pepper /opt/ovpn-admin/dev.pepper
+sudo mkdir -p /var/lib/ovpn-admin
+sudo chown ovpn-admin:openvpn-access /var/lib/ovpn-admin
+
+# CCD and bundle directories (match your config)
+sudo mkdir -p /etc/openvpn/ccd /var/lib/ovpn-admin/bundles
+sudo chown -R ovpn-admin:openvpn-access /etc/openvpn/ccd /var/lib/ovpn-admin/bundles
+
+# vpn-certd socket
+sudo chgrp openvpn-access /var/run/vpn-certd.sock
+sudo chmod 660 /var/run/vpn-certd.sock
+
+# OpenVPN mgmt socket (if enabled)
+sudo chgrp openvpn-access /var/run/openvpn-mgmt.sock
+sudo chmod 660 /var/run/openvpn-mgmt.sock
+```
+Adjust paths to match your config/*.toml.
+
+### Systemd Service
+```service
+# contrib/ovpn-admin.service
+[Unit]
+Description=OVPN Admin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ovpn-admin
+Group=openvpn-access
+Environment=RUST_LOG=info
+WorkingDirectory=/opt/ovpn-admin
+ExecStart=/opt/ovpn-admin/ovpn-admin
+Restart=on-failure
+RestartSec=2
+
+# Allow access to Unix sockets & local files without broad privileges
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## Troubleshooting
 
